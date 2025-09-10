@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Workout Tracker - 6개월 루틴</title>
+<style>
+  :root{--bg:#000;--card:#fff;--text:#000;--muted:#7a7a7a;--green:#22c55e}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:#fff;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    display:flex;
+    justify-content:center;
+    padding:16px;
+  }
+  .wrap{width:100%;max-width:420px}
+  header{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .date{font-size:20px;font-weight:700;color:#fff}
+  .meta{font-size:12px;color:#cfcfcf}
+  main{display:flex;flex-direction:column;gap:12px}
+  .board{display:flex;flex-direction:column;gap:8px}
+  .item{
+    display:flex;align-items:center;gap:12px;
+    background:var(--card);color:var(--text);
+    padding:12px;border-radius:14px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.25);
+    transition:background .18s, color .18s, transform .12s;
+  }
+  .left-check{
+    width:34px;height:34px;border-radius:999px;
+    display:flex;align-items:center;justify-content:center;
+    flex:0 0 34px;
+    cursor:pointer;
+  }
+  .left-check.incomplete{
+    background:#efefef;border:2px solid #bdbdbd;
+  }
+  .left-check.completed{
+    background:var(--green);border:2px solid #1fa34a;color:#003000;
+  }
+  .left-check .tick{font-size:16px;line-height:1;display:block}
+  .txt{font-size:14px;line-height:1.25}
+  .txt .small{display:block;font-size:12px;color:#555;margin-top:6px}
+  .muted{color:var(--muted)}
+  .muted-bg{background:#efefef;color:#7a7a7a}
+  .empty{color:#cfcfcf;text-align:center;padding:10px}
+  footer{font-size:12px;color:#cfcfcf;margin-top:8px}
+  @media (max-width:420px){
+    .date{font-size:18px}
+    .txt{font-size:13px}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap" id="app">
+    <header>
+      <div class="date" id="todayStr">YYYY/MM/DD</div>
+      <div class="meta" id="weekInfo">주차: - | 요일: -</div>
+    </header>
+
+    <main>
+      <div id="note" class="meta">모든 kg 표시는 <strong>추측입니다</strong>.</div>
+
+      <section class="board" id="board">
+        <!-- Checklist items injected here -->
+      </section>
+
+      <div id="noWork" class="empty" style="display:none">오늘은 운동 없는 날</div>
+
+      <footer id="foot" class="meta"></footer>
+    </main>
+  </div>
+
+<script>
+/* 설정: 1주차 월요일 = 2025-09-15 */
+const START_DATE = (()=>{ const d=new Date(2025,8,15); d.setHours(0,0,0,0); return d })();
+
+/* 주차별 중량 데이터 (1..24) — 값은 '추측' 표기 포함 */
+const weekWeights = [
+  null,
+  {shoulder:'6kg', lateral:'3kg', bench:'8kg', drow:'8kg', barOver:'15kg', barRow:'20kg'},
+  {shoulder:'6.5kg', lateral:'3.1kg', bench:'8.2kg', drow:'8.2kg', barOver:'15.5kg', barRow:'20.5kg'},
+  {shoulder:'6.8kg', lateral:'3.2kg', bench:'8.5kg', drow:'8.5kg', barOver:'16kg', barRow:'21kg'},
+  {shoulder:'5.5kg', lateral:'2.7kg', bench:'7kg', drow:'7kg', barOver:'13.5kg', barRow:'18kg'},
+  {shoulder:'6.8kg', lateral:'3.2kg', bench:'8.5kg', drow:'8.5kg', barOver:'16kg', barRow:'21kg'},
+  {shoulder:'7kg', lateral:'3.4kg', bench:'9kg', drow:'9kg', barOver:'16.5kg', barRow:'21.5kg'},
+  {shoulder:'7.2kg', lateral:'3.5kg', bench:'9.2kg', drow:'9.2kg', barOver:'17kg', barRow:'22kg'},
+  {shoulder:'6kg', lateral:'3kg', bench:'7.5kg', drow:'7.5kg', barOver:'14kg', barRow:'19kg'},
+  {shoulder:'7.2kg', lateral:'3.5kg', bench:'9.2kg', drow:'9.2kg', barOver:'17kg', barRow:'22kg'},
+  {shoulder:'7.5kg', lateral:'3.7kg', bench:'9.5kg', drow:'9.5kg', barOver:'17.5kg', barRow:'22.5kg'},
+  {shoulder:'7.8kg', lateral:'3.9kg', bench:'9.8kg', drow:'9.8kg', barOver:'18kg', barRow:'23kg'},
+  {shoulder:'6.8kg', lateral:'3.2kg', bench:'8kg', drow:'8kg', barOver:'15kg', barRow:'20kg'},
+  {shoulder:'7.8kg', lateral:'3.9kg', bench:'9.8kg', drow:'9.8kg', barOver:'18kg', barRow:'23kg'},
+  {shoulder:'8kg', lateral:'4kg', bench:'10kg', drow:'10kg', barOver:'18.5kg', barRow:'23.5kg'},
+  {shoulder:'8.2kg', lateral:'4.1kg', bench:'10.2kg', drow:'10.2kg', barOver:'19kg', barRow:'24kg'},
+  {shoulder:'7kg', lateral:'3.5kg', bench:'8.5kg', drow:'8.5kg', barOver:'15.5kg', barRow:'21kg'},
+  {shoulder:'8.2kg', lateral:'4.1kg', bench:'10.2kg', drow:'10.2kg', barOver:'19kg', barRow:'24kg'},
+  {shoulder:'8.5kg', lateral:'4.2kg', bench:'10.5kg', drow:'10.5kg', barOver:'19.5kg', barRow:'24.5kg'},
+  {shoulder:'8.8kg', lateral:'4.4kg', bench:'10.8kg', drow:'10.8kg', barOver:'20kg', barRow:'25kg'},
+  {shoulder:'7.5kg', lateral:'3.7kg', bench:'9kg', drow:'9kg', barOver:'16kg', barRow:'21kg'},
+  {shoulder:'8.8kg', lateral:'4.4kg', bench:'10.8kg', drow:'10.8kg', barOver:'20kg', barRow:'25kg'},
+  {shoulder:'9kg', lateral:'4.5kg', bench:'11kg', drow:'11kg', barOver:'20.5kg', barRow:'25.5kg'},
+  {shoulder:'9.3kg', lateral:'4.7kg', bench:'11.3kg', drow:'11.3kg', barOver:'21kg', barRow:'26kg'},
+  {shoulder:'8kg', lateral:'4kg', bench:'10kg', drow:'10kg', barOver:'17kg', barRow:'22kg'}
+];
+
+/* 요일별 템플릿: 월(1), 수(3), 금(5), 일(0) */
+const plansByDay = {
+  1: [
+    {name:'덤벨 숄더프레스', weightKey:'shoulder', sets:4, reps:'10–12', rest:'90초'},
+    {name:'사이드 레터럴 레이즈', weightKey:'lateral', sets:4, reps:'12–15', rest:'60초'},
+    {name:'바벨 업라이트 로우', weightKey:'barOver', sets:3, reps:'10–12', rest:'90초'},
+    {name:'푸시업(어깨 넓게)', weightFixed:'체중', sets:3, reps:'12–15', rest:'60초'},
+    {name:'플랭크', weightFixed:'체중', sets:3, reps:'30–60초', rest:'60초'}
+  ],
+  3: [
+    {name:'인클라인 푸시업', weightFixed:'체중', sets:4, reps:'12–15', rest:'60초'},
+    {name:'덤벨 벤치프레스', weightKey:'bench', sets:4, reps:'10–12', rest:'90초'},
+    {name:'덤벨 플라이', weightFixed:'초기 4kg (추측)', sets:3, reps:'12–15', rest:'60초'},
+    {name:'사이드 레터럴 레이즈', weightKey:'lateral', sets:4, reps:'12–15', rest:'60초'},
+    {name:'슈퍼맨', weightFixed:'체중', sets:3, reps:'12–15', rest:'60초'}
+  ],
+  5: [
+    {name:'바벨 오버헤드 프레스', weightKey:'barOver', sets:4, reps:'8–10', rest:'90초'},
+    {name:'덤벨 프론트 레이즈', weightKey:'lateral', sets:3, reps:'12–15', rest:'60초'},
+    {name:'사이드 레터럴 레이즈', weightKey:'lateral', sets:4, reps:'12–15', rest:'60초'},
+    {name:'딥스(벤치 딥스)', weightFixed:'체중', sets:3, reps:'10–12', rest:'90초'},
+    {name:'사이드 플랭크 변형', weightFixed:'체중', sets:3, reps:'30–40초', rest:'60초'}
+  ],
+  0: [
+    {name:'풀업(밴드 보조 가능)', weightFixed:'체중/밴드', sets:4, reps:'6–10', rest:'90초'},
+    {name:'덤벨 로우', weightKey:'drow', sets:4, reps:'10–12', rest:'90초'},
+    {name:'바벨 로우', weightKey:'barRow', sets:3, reps:'10–12', rest:'90초'},
+    {name:'사이드 레터럴 레이즈', weightKey:'lateral', sets:4, reps:'12–15', rest:'60초'},
+    {name:'푸시업(일반)', weightFixed:'체중', sets:3, reps:'12–15', rest:'60초'}
+  ]
+};
+
+/* 유틸 */
+function formatYMD(d){
+  const y=d.getFullYear();
+  const m=(d.getMonth()+1).toString().padStart(2,'0');
+  const day=d.getDate().toString().padStart(2,'0');
+  return `${y}/${m}/${day}`;
+}
+function clampWeek(n){ if(n<1) return 1; if(n>24) return 24; return n }
+
+/* 주차 계산 */
+function computeWeekNumber(today){
+  const msPerDay = 24*60*60*1000;
+  const a = new Date(today); a.setHours(0,0,0,0);
+  const b = new Date(START_DATE); b.setHours(0,0,0,0);
+  const diffDays = Math.floor((a - b)/msPerDay);
+  const wk = Math.floor(diffDays/7) + 1;
+  return {wk, diffDays};
+}
+
+/* 로컬스토리지 키 */
+function storageKeyFor(dateStr){ return 'workout_'+dateStr.replace(/\//g,'-') }
+
+/* 초기화 및 렌더링 */
+(function init(){
+  const now = new Date();
+  const todayStr = formatYMD(now);
+  document.getElementById('todayStr').textContent = todayStr;
+
+  const dayNum = now.getDay(); // 0 Sun,1 Mon,...
+  const dayNames = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
+  const {wk,diffDays} = computeWeekNumber(now);
+  const inRange = (wk>=1 && wk<=24 && diffDays>=0);
+  const weekText = `주차: ${wk} ${ inRange ? '' : '(스케줄 범위 외 또는 시작일 이전)' } | 요일: ${dayNames[dayNum]}`;
+  document.getElementById('weekInfo').textContent = weekText;
+
+  const plan = plansByDay[dayNum] || [];
+  const board = document.getElementById('board');
+  const noWork = document.getElementById('noWork');
+  const foot = document.getElementById('foot');
+
+  if(plan.length === 0){
+    board.style.display='none';
+    noWork.style.display='block';
+    foot.textContent = '운동요일은 월/수/금/일 입니다.';
+    return;
+  } else {
+    board.style.display='flex';
+    noWork.style.display='none';
+  }
+
+  const weekIndex = clampWeek(wk);
+
+  /* 로컬 저장된 상태 병합 또는 초기화 */
+  const key = storageKeyFor(todayStr);
+  let saved = localStorage.getItem(key);
+  let state = [];
+  if(saved){
+    try{ state = JSON.parse(saved) }catch(e){ state = [] }
+  }
+  if(!state || state.length !== plan.length){
+    state = plan.map((ex,i)=>({
+      id:i,
+      name:ex.name,
+      weight: ex.weightFixed ? ex.weightFixed : (weekWeights[weekIndex] && ex.weightKey ? weekWeights[weekIndex][ex.weightKey] : (ex.weightFixed||'-')),
+      sets: ex.sets,
+      reps: ex.reps,
+      rest: ex.rest,
+      completed: false
+    }));
+    // merge previous saved completed flags if shapes match
+    try{
+      const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+      if(Array.isArray(parsed) && parsed.length===plan.length){
+        parsed.forEach((p,i)=>{ if(p && p.completed) state[i].completed = true });
+        state = reorderByCompleted(state);
+      }
+    }catch(e){}
+    localStorage.setItem(key, JSON.stringify(state));
+  }
+
+  renderList(board, state, key);
+  foot.textContent = `시작일: 2025/09/15 | 적용 주차(표 기준): ${weekIndex}주차`;
+})();
+
+/* 재정렬 함수 */
+function reorderByCompleted(arr){
+  const incomplete = arr.filter(x=>!x.completed);
+  const completed = arr.filter(x=>x.completed);
+  return [...incomplete, ...completed];
+}
+
+/* 렌더링 */
+function renderList(container, items, storageKey){
+  container.innerHTML = '';
+  items.forEach((it, idx)=>{
+    const el = document.createElement('div');
+    el.className = 'item' + (it.completed ? ' muted-bg' : '');
+    // left check
+    const left = document.createElement('button');
+    left.className = 'left-check ' + (it.completed ? 'completed' : 'incomplete');
+    left.setAttribute('aria-checked', it.completed ? 'true':'false');
+    left.onclick = () => toggleComplete(idx, storageKey);
+    left.innerHTML = `<span class="tick">${it.completed ? '✓' : ''}</span>`;
+    // text
+    const txt = document.createElement('div');
+    txt.className = 'txt';
+    txt.innerHTML = `<strong>${it.name}</strong><span class="small">${it.weight} / ${it.sets}세트 / 휴식 ${it.rest}</span>`;
+    if(it.completed){ txt.classList.add('muted'); txt.querySelector('.small').classList.add('muted') }
+
+    el.appendChild(left);
+    el.appendChild(txt);
+    container.appendChild(el);
+  });
+}
+
+/* 체크 토글: 클릭 시 completed toggle, 텍스트 회색, 체크 초록, 항목을 리스트 최하단으로 이동 */
+function toggleComplete(clickedIndex, storageKey){
+  const raw = localStorage.getItem(storageKey);
+  if(!raw) return;
+  let state;
+  try{ state = JSON.parse(raw) }catch(e){ return }
+  if(!Array.isArray(state)) return;
+
+  const target = state[clickedIndex];
+  if(!target) return;
+
+  target.completed = !target.completed;
+
+  // reorder so incomplete first, completed last
+  let newState = reorderByCompleted(state);
+
+  // if just marked completed, move that specific item to the end
+  if(target.completed){
+    const idx = newState.findIndex(x=>x.name===target.name && x.sets===target.sets && x.weight===target.weight);
+    if(idx>-1){
+      const [item] = newState.splice(idx,1);
+      newState.push(item);
+    }
+  }
+
+  localStorage.setItem(storageKey, JSON.stringify(newState));
+  renderList(document.getElementById('board'), newState, storageKey);
+}
+</script>
+</body>
+</html>
